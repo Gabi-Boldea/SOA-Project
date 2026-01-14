@@ -3,23 +3,31 @@
 ## Microservices + Nginx LB + RabbitMQ + Kafka + FaaS + Micro-frontends
 
 This repository contains a distributed system implementing:
-- Secured REST (Auth service issues JWT)
-- API Gateway (JWT verification, forwards user id downstream)
-- Task Service (REST API, load-balanced via Nginx)
-- Notification Service (Socket.IO notifications)
-- RabbitMQ (message broker)
-- Kafka (event streaming)
-- FaaS function service (HTTP function used by Task Service)
-- Micro-frontend UI (Shell + Tasks widget + Notifications widget)
+
+- **Secured REST** (Auth service issues JWT)
+- **API Gateway** (JWT verification, forwards user id downstream)
+- **Task Service** (REST API, load-balanced via Nginx)
+- **Notification Service** (Socket.IO notifications)
+- **RabbitMQ** (message broker)
+- **Kafka** (event streaming)
+- **FaaS function service** (HTTP “function” used by Task Service)
+- **Micro-frontend UI** (Shell + Tasks widget + Notifications widget)
+
+---
 
 ## Architecture
-Client (Shell MFE) calls:
+
+### Client access
+
+The client (Shell micro-frontend) calls:
+
 - REST via Nginx: `http://localhost:3010/api/...`
 - Socket.IO via Nginx: `http://localhost:3010/socket.io/`
 
-Nginx load-balances Task Service instances and proxies Socket.IO to the notification service.
+Nginx load-balances **Task Service** instances and proxies **Socket.IO** to the **Notification Service**.
 
 ### Architecture overview
+
 This diagram shows how the micro-frontends, Nginx load balancer, backend services, and messaging/eventing components interact.
 
 ```mermaid
@@ -32,13 +40,12 @@ flowchart LR
   mf_notif -->|Socket.IO| nginx
 
   nginx -->|/api/auth/*| api_gateway[API Gateway :3000]
-  nginx -->|/api/* or /tasks| taskA[Task Service A :3002]
-  nginx -->|/api/* or /tasks| taskB[Task Service B :3005]
+  nginx -->|/api/*| api_gateway
   nginx -->|/socket.io/*| notif_service[Notification Service :3003]
 
   api_gateway -->|proxy| auth_service[Auth Service :3001]
-  api_gateway -->|proxy| taskA
-  api_gateway -->|proxy| taskB
+  api_gateway -->|proxy| taskA[Task Service A :3002]
+  api_gateway -->|proxy| taskB[Task Service B :3005]
 
   taskA -->|HTTP call| faas[FaaS Function :4010]
   taskB -->|HTTP call| faas
@@ -50,8 +57,13 @@ flowchart LR
   taskA -->|produce| kafka[(Kafka :9092)]
   taskB -->|produce| kafka
   analytics[Analytics Service] -->|consume| kafka
+```
 
-### Sequence (Create task → FaaS → RabbitMQ/Kafka → Notifications)
+---
+
+## Sequence
+
+### Create task → FaaS → RabbitMQ/Kafka → Notifications
 
 This sequence shows the main user flow: creating a task calls a FaaS function to generate a summary, then emits events to RabbitMQ and Kafka, and finally notifies the UI via Socket.IO.
 
@@ -65,6 +77,7 @@ sequenceDiagram
   participant R as RabbitMQ (5672)
   participant NS as Notification Service (3003)
   participant UI2 as mf-notifications
+  participant K as Kafka (9092)
 
   UI->>N: POST /api/tasks (Bearer JWT)
   N->>GW: forward /api/tasks
@@ -79,11 +92,20 @@ sequenceDiagram
   R-->>NS: deliver task.created
   NS-->>UI2: socket emit "notification"
 
-  TS->>kafka: produce task.created
-  
-## C4 models
+  TS->>K: produce task.created
+```
+
+---
+
+## C4 Models
+
+The C4 model is a lightweight architecture documentation method with multiple levels:
+
+- **Level 1 (System Context)**: system as a black box + external dependencies
+- **Level 2 (Containers)**: deployable units/services and how they interact
 
 ### C4 Level 1 — System Context
+
 Shows the system as a black box and the main external dependencies.
 
 ```mermaid
@@ -91,79 +113,193 @@ flowchart TB
   user((User)) --> system[SOA Assignment System]
   system --> rabbit[(RabbitMQ)]
   system --> kafka[(Kafka)]
+```
 
 ### C4 Level 2 — Containers
+
 Shows the main deployable units (frontends, gateway, services, infra).
 
+```mermaid
 flowchart LR
   user((User)) --> shell[Web App (Micro-frontends)]
-  shell --> nginx[Nginx LB]
-  nginx --> gw[API Gateway]
-  gw --> auth[Auth Service]
-  gw --> tasks[Task Service (scaled)]
-  nginx --> notif[Notification Service (Socket.IO)]
+  shell --> nginx[Nginx LB :3010]
+
+  nginx --> gw[API Gateway :3000]
+  gw --> auth[Auth Service :3001]
+  gw --> tasks[Task Service (scaled) :3002/:3005]
+
+  nginx --> notif[Notification Service (Socket.IO) :3003]
+
   tasks --> rabbit[(RabbitMQ)]
   tasks --> kafka[(Kafka)]
-  tasks --> faas[FaaS Function]
+  tasks --> faas[FaaS Function :4010]
+
   kafka --> analytics[Analytics Service]
+```
+
+---
 
 ## Prerequisites
-- Node.js (v18+ recommended; works with newer versions)
-- Docker Desktop (for RabbitMQ/Kafka/Nginx if you containerize them)
-- npm
+
+- **Node.js** (v18+ recommended; works with newer versions)
+- **Docker Desktop** (for RabbitMQ/Kafka and optionally Nginx)
+- **npm**
+
+---
 
 ## Ports
-- Nginx LB: 3010
-- API Gateway: 3000
-- Auth service: 3001
-- Task service: 3002 (instance A) and 3005 (instance B)
-- Notification service: 3003
-- FaaS function: 4010
-- RabbitMQ: 5672 (AMQP), 15672 (UI)
-- Kafka: 9092, Zookeeper: 2181
-- Shell MFE: 5173
-- mf-tasks: 5174
-- mf-notifications: 5175
+
+### Reverse proxy / Load balancer
+
+| Component | Port |
+|---|---:|
+| Nginx LB | `3010` |
+
+### Backend
+
+| Component | Port |
+|---|---:|
+| API Gateway | `3000` |
+| Auth Service | `3001` |
+| Task Service (instance A) | `3002` |
+| Task Service (instance B) | `3005` |
+| Notification Service (Socket.IO) | `3003` |
+| FaaS Function Service | `4010` |
+
+### Messaging / Streaming
+
+| Component | Port(s) |
+|---|---:|
+| RabbitMQ (AMQP) | `5672` |
+| RabbitMQ UI | `15672` |
+| Kafka | `9092` |
+| Zookeeper | `2181` |
+
+### Frontend (micro-frontends)
+
+| Component | Port |
+|---|---:|
+| Shell MFE | `5173` |
+| mf-tasks | `5174` |
+| mf-notifications | `5175` |
+
+---
 
 ## Run (dev)
-Open multiple terminals and start each service:
+
+Open multiple terminals and start each service.
 
 ### 1) Infrastructure
-Start RabbitMQ + Kafka (and any other infra you have compose for):
-- RabbitMQ UI: http://localhost:15672 (guest/guest)
+
+Start RabbitMQ + Kafka (and any other infra you have compose for).
+
+RabbitMQ UI:
+
+- `http://localhost:15672` (guest/guest)
 
 ### 2) Backend services
+
 In separate terminals:
-- `auth-service`: `npm start`
-- `api-gateway`: `npm start`
-- `task-service` (A): `npm start`
-- `task-service` (B): run with `PORT=3005 INSTANCE_ID=B npm start`
-- `notification-service`: `npm start`
-- `faas-function`: `npm start`
+
+**Auth service**
+```bash
+cd auth-service && npm start
+```
+
+**API Gateway**
+```bash
+cd api-gateway && npm start
+```
+
+**Task service (A)**
+```bash
+cd task-service && npm start
+```
+
+**Task service (B)**
+```bash
+cd task-service && PORT=3005 INSTANCE_ID=B npm start
+```
+
+**Notification service**
+```bash
+cd notification-service && npm start
+```
+
+**FaaS function**
+```bash
+cd faas-function && npm start
+```
 
 ### 3) Nginx
-Use `nginx.conf` to run the load balancer on port 3010.
+
+Use `nginx.conf` from this repository to run the load balancer on port **3010**.
 
 ### 4) Frontend (micro-frontends)
+
 In separate terminals:
-- `shell`: `npm run dev`
-- `mf-tasks`: `npm run dev`
-- `mf-notifications`: `npm run dev`
 
-Open: http://localhost:5173
+```bash
+cd shell && npm run dev
+```
 
-## Quick verification
+```bash
+cd mf-tasks && npm run dev
+```
+
+```bash
+cd mf-notifications && npm run dev
+```
+
+Open:
+
+- `http://localhost:5173`
+
+---
+
+## Quick verification (proof for grading)
+
 ### RabbitMQ evidence
-Queue `task_events` shows publish/deliver/ack.
+
+- Queue `task_events` shows publish/deliver/ack.
+
+Optional API checks:
+
+```bash
+curl -u guest:guest http://localhost:15672/api/queues/%2F
+```
+
+```bash
+curl -u guest:guest http://localhost:15672/api/connections
+```
 
 ### Kafka evidence
-Topic `task-events` contains JSON events like `task.created`.
+
+- Topic `task-events` contains JSON events like `task.created`.
+
+List topics:
+
+```bash
+docker exec -it project-kafka-1 kafka-topics --bootstrap-server localhost:9092 --list
+```
+
+Consume events:
+
+```bash
+docker exec -it project-kafka-1 kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic task-events \
+  --from-beginning \
+  --timeout-ms 5000
+```
 
 ### FaaS evidence
-`POST http://localhost:4010/generate-summary` returns `{ summary, at }` and task creation stores `summary`.
 
-### Notifications evidence
-Create a task in the UI → notification appears in Notifications widget.
+- `POST http://localhost:4010/generate-summary` returns `{ summary, at }`
+- Task creation stores the generated summary.
 
-## Notes
-- The Task service currently expects `x-user-id` header (in dev). If routed through the API Gateway, the gateway can inject this header after verifying the JWT.
+```bash
+curl -i -X POST http://localhost:4010/generate-summary \
+  -H "Content-Type: application/json" \
+  -d '{"title":"My first FaaS task"}'
+```
