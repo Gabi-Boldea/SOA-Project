@@ -121,20 +121,21 @@ Shows the main deployable units (frontends, gateway, services, infra).
 
 ```mermaid
 flowchart LR
-  user((User)) --> shell[Web App (Micro-frontends)]
-  shell --> nginx[Nginx LB :3010]
+  user((User)) --> shell["Web App (Micro-frontends)"]
+  shell --> nginx["Nginx LB :3010"]
 
-  nginx --> gw[API Gateway :3000]
-  gw --> auth[Auth Service :3001]
-  gw --> tasks[Task Service (scaled) :3002/:3005]
+  nginx --> gw["API Gateway :3000"]
+  gw --> auth["Auth Service :3001"]
+  gw --> tasks["Task Service (scaled) :3002/:3005"]
 
-  nginx --> notif[Notification Service (Socket.IO) :3003]
+  nginx --> notif["Notification Service (Socket.IO) :3003"]
 
   tasks --> rabbit[(RabbitMQ)]
   tasks --> kafka[(Kafka)]
-  tasks --> faas[FaaS Function :4010]
+  tasks --> faas["FaaS Function :4010"]
 
-  kafka --> analytics[Analytics Service]
+  kafka --> analytics["Analytics Service"]
+
 ```
 
 ---
