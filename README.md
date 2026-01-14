@@ -1,6 +1,6 @@
 # SOA Assignment
 
-# SOA Project (Node.js) — Microservices + Nginx LB + RabbitMQ + Kafka + FaaS + Micro-frontends
+# Microservices + Nginx LB + RabbitMQ + Kafka + FaaS + Micro-frontends
 
 This repository contains a distributed system implementing:
 - Secured REST (Auth service issues JWT)
